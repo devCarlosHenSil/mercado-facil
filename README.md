@@ -2,7 +2,7 @@
 
 > Agregador de ofertas de supermercados, atacados e hipermercados com geolocalização em tempo real.
 
-[![CI/CD](https://github.com/SEU_USUARIO/mercadofacil/actions/workflows/ci.yml/badge.svg)](https://github.com/SEU_USUARIO/mercadofacil/actions)
+[![CI/CD](https://github.com/devCarlosHenSil/mercadofacil/actions/workflows/ci.yml/badge.svg)](https://github.com/devCarlosHenSil/mercadofacil/actions)
 ![Go](https://img.shields.io/badge/Go-1.22-00ADD8?logo=go)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
 ![License](https://img.shields.io/badge/license-MIT-green)
