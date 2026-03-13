@@ -1,60 +1,47 @@
 import { useEffect } from 'react'
 import { useStore } from '../store/useStore'
-import toast from 'react-hot-toast'
+
+// SET TRUE para usar localizacao fixa (quando geo estiver bloqueada pelo sistema)
+// SET FALSE quando quiser usar GPS/localizacao real do browser
+const USE_FIXED_LOCATION = true
+const FIXED_LOCATION = { lat: -23.2644, lng: -47.2994, city: 'Itu', state: 'SP' }
 
 export function useGeolocation() {
-  const { setLocation, setLocationError, setLocationLoading } = useStore()
+  const { setLocation, setLocationLoading } = useStore()
 
   useEffect(() => {
-    try {
-      const cached = localStorage.getItem('mf_location')
-      if (cached) {
-        const { loc, ts } = JSON.parse(cached)
-        if (Date.now() - ts < 30 * 60 * 1000) {
-          setLocation(loc)
-          return
-        }
-      }
-    } catch (_) {}
+    if (USE_FIXED_LOCATION) {
+      setLocation(FIXED_LOCATION)
+      return
+    }
 
     if (!navigator.geolocation) {
-      setLocationError('Geolocalização não suportada.')
+      setLocation(FIXED_LOCATION)
       return
     }
 
     setLocationLoading(true)
-
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude: lat, longitude: lng } = pos.coords
-        let city = 'sua cidade', state = ''
+        let city = 'Itu', state = 'SP'
         try {
           const r = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=pt-BR`,
+            'https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lng + '&format=json&accept-language=pt-BR',
             { headers: { 'User-Agent': 'MercadoFacil/1.0' } }
           )
-          const data = await r.json()
-          city  = data.address?.city || data.address?.town || data.address?.village || city
-          state = data.address?.state_code || ''
+          const d = await r.json()
+          city = d.address?.city || d.address?.town || d.address?.village || city
+          state = d.address?.state_code || state
         } catch (_) {}
-
-        const loc = { lat, lng, city, state }
-        setLocation(loc)
+        setLocation({ lat, lng, city, state })
         setLocationLoading(false)
-        try { localStorage.setItem('mf_location', JSON.stringify({ loc, ts: Date.now() })) } catch (_) {}
-        toast.success(`��� ${city}${state ? ', ' + state : ''}`, {
-          style: { background: '#1a1a23', color: '#f0f0f8', border: '1px solid rgba(255,255,255,0.1)' }
-        })
       },
-      (err) => {
+      () => {
+        setLocation(FIXED_LOCATION)
         setLocationLoading(false)
-        const msg = err.code === err.PERMISSION_DENIED
-          ? 'Permissão de localização negada.'
-          : 'Não foi possível obter sua localização.'
-        setLocationError(msg)
-        toast.error(msg, { style: { background: '#1a1a23', color: '#f0f0f8' } })
       },
-      { enableHighAccuracy: false, timeout: 10000 }
+      { enableHighAccuracy: false, timeout: 8000 }
     )
   }, [])
 }

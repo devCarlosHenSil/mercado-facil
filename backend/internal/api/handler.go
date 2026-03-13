@@ -1,140 +1,117 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
-	"strconv"
 	"time"
 
 	"mercadofacil/internal/cache"
-	"mercadofacil/internal/models"
 	"mercadofacil/internal/scraper"
 )
+
+const scraperBase = "http://localhost:3001"
 
 type Handler struct {
 	aggregator *scraper.Aggregator
 	cache      *cache.Cache
+	httpClient *http.Client
 }
 
 func NewHandler(agg *scraper.Aggregator, c *cache.Cache) *Handler {
-	return &Handler{aggregator: agg, cache: c}
+	return &Handler{
+		aggregator: agg,
+		cache:      c,
+		httpClient: &http.Client{Timeout: 90 * time.Second},
+	}
 }
 
 func (h *Handler) ServeHTTP(mux *http.ServeMux) {
-	mux.HandleFunc("/api/search", h.withCORS(h.Search))
-	mux.HandleFunc("/api/nearby-stores", h.withCORS(h.NearbyStores))
-	mux.HandleFunc("/api/categories", h.withCORS(h.Categories))
-	mux.HandleFunc("/api/health", h.withCORS(h.Health))
+	mux.HandleFunc("/api/search",  h.withCORS(h.Search))
+	mux.HandleFunc("/api/stores",  h.withCORS(h.Stores))
+	mux.HandleFunc("/api/health",  h.withCORS(h.Health))
 }
 
-// Search godoc
-// GET /api/search?q=arroz&lat=-23.55&lng=-46.63&radius=10&sort=price&page=1&category=mercearia
+// POST /api/search — proxy para o serviço Node de busca
 func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpError(w, "method not allowed", http.StatusMethodNotAllowed)
+	if r.Method != http.MethodPost {
+		httpError(w, "use POST com body {query: string}", http.StatusMethodNotAllowed)
 		return
 	}
-
-	q := r.URL.Query()
-	params := models.SearchParams{
-		Query:    q.Get("q"),
-		Category: q.Get("category"),
-		SortBy:   q.Get("sort"),
-		Page:     parseIntDefault(q.Get("page"), 1),
-		PageSize: parseIntDefault(q.Get("page_size"), 20),
-	}
-
-	var err error
-	if params.Lat, err = parseFloat(q.Get("lat")); err != nil {
-		httpError(w, "lat inválido", http.StatusBadRequest)
-		return
-	}
-	if params.Lng, err = parseFloat(q.Get("lng")); err != nil {
-		httpError(w, "lng inválido", http.StatusBadRequest)
-		return
-	}
-	params.RadiusKm = parseFloatDefault(q.Get("radius"), 10.0)
-
-	// Cache key
-	cacheKey := fmt.Sprintf("search:%s:%.4f:%.4f:%.1f:%s:%s:%d",
-		params.Query, params.Lat, params.Lng, params.RadiusKm,
-		params.Category, params.SortBy, params.Page)
-
-	if cached, ok := h.cache.Get(cacheKey); ok {
-		writeJSON(w, cached)
-		return
-	}
-
-	result := h.aggregator.Search(params)
-	h.cache.Set(cacheKey, result)
-	writeJSON(w, result)
-}
-
-// NearbyStores retorna lojas próximas ao usuário
-func (h *Handler) NearbyStores(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpError(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	q := r.URL.Query()
-	lat, err := parseFloat(q.Get("lat"))
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1024))
 	if err != nil {
-		httpError(w, "lat inválido", http.StatusBadRequest)
+		httpError(w, "erro lendo body", http.StatusBadRequest)
 		return
 	}
-	lng, err := parseFloat(q.Get("lng"))
+
+	// Valida JSON mínimo
+	var req map[string]interface{}
+	if err := json.Unmarshal(body, &req); err != nil || req["query"] == nil {
+		httpError(w, `body deve ser {"query": "nome do produto"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Proxy para o Node
+	resp, err := h.httpClient.Post(scraperBase+"/search", "application/json", bytes.NewReader(body))
 	if err != nil {
-		httpError(w, "lng inválido", http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":   "Servico de busca indisponivel. Verifique se o scraper esta rodando (npm start na pasta scraper/).",
+			"details": err.Error(),
+		})
 		return
 	}
-	radius := parseFloatDefault(q.Get("radius"), 10.0)
+	defer resp.Body.Close()
 
-	cacheKey := fmt.Sprintf("stores:%.4f:%.4f:%.1f", lat, lng, radius)
-	if cached, ok := h.cache.Get(cacheKey); ok {
-		writeJSON(w, cached)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+// GET /api/stores — lista lojas suportadas
+func (h *Handler) Stores(w http.ResponseWriter, r *http.Request) {
+	resp, err := h.httpClient.Get(scraperBase + "/stores")
+	if err != nil {
+		writeJSON(w, []interface{}{})
 		return
 	}
-
-	stores := h.aggregator.GetNearbyStores(lat, lng, radius)
-	h.cache.Set(cacheKey, stores)
-	writeJSON(w, stores)
+	defer resp.Body.Close()
+	w.Header().Set("Content-Type", "application/json")
+	io.Copy(w, resp.Body)
 }
 
-// Categories retorna categorias disponíveis
-func (h *Handler) Categories(w http.ResponseWriter, r *http.Request) {
-	categories := []models.Category{
-		{ID: "todos",      Name: "Todos",      Icon: "cart",  Color: "#FF6B35"},
-		{ID: "mercearia",  Name: "Mercearia",  Icon: "grain", Color: "#F7931E"},
-		{ID: "hortifruti", Name: "Hortifruti", Icon: "leaf",  Color: "#4CAF50"},
-		{ID: "acougue",    Name: "Acougue",    Icon: "meat",  Color: "#E53935"},
-		{ID: "laticinios", Name: "Laticinios", Icon: "milk",  Color: "#FFC107"},
-		{ID: "padaria",    Name: "Padaria",    Icon: "bread", Color: "#795548"},
-		{ID: "frios",      Name: "Frios",      Icon: "cold",  Color: "#00BCD4"},
-		{ID: "bebidas",    Name: "Bebidas",    Icon: "drink", Color: "#9C27B0"},
-		{ID: "limpeza",    Name: "Limpeza",    Icon: "clean", Color: "#607D8B"},
-		{ID: "higiene",    Name: "Higiene",    Icon: "health",Color: "#FF4081"},
-	}
-	writeJSON(w, categories)
-}
-
-// Health endpoint de saúde
+// GET /api/health
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
+	// Verifica se scraper está online
+	scraperOk := false
+	resp, err := h.httpClient.Get(scraperBase + "/health")
+	if err == nil && resp.StatusCode == 200 {
+		scraperOk = true
+		resp.Body.Close()
+	}
 	writeJSON(w, map[string]interface{}{
-		"status": "ok",
-		"time":   time.Now().Format(time.RFC3339),
+		"ok":      true,
+		"scraper": scraperOk,
+		"ts":      fmt.Sprintf("%d", time.Now().Unix()),
 	})
 }
 
-// withCORS middleware CORS para dev e produção
+// ─── Helpers ──────────────────────────────────────────────────────────────
+func withCORSHeaders(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type,Authorization")
+	w.Header().Set("Content-Type", "application/json")
+}
+
 func (h *Handler) withCORS(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		withCORSHeaders(w)
 		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
+			w.WriteHeader(http.StatusOK)
 			return
 		}
 		next(w, r)
@@ -150,27 +127,4 @@ func httpError(w http.ResponseWriter, msg string, code int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
-}
-
-func parseFloat(s string) (float64, error) {
-	if s == "" {
-		return 0, fmt.Errorf("vazio")
-	}
-	return strconv.ParseFloat(s, 64)
-}
-
-func parseFloatDefault(s string, def float64) float64 {
-	v, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		return def
-	}
-	return v
-}
-
-func parseIntDefault(s string, def int) int {
-	v, err := strconv.Atoi(s)
-	if err != nil || v < 1 {
-		return def
-	}
-	return v
 }

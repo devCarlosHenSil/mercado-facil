@@ -1,65 +1,33 @@
 import { create } from 'zustand'
-
 export const useStore = create((set, get) => ({
-  // Geolocalização
-  location: null,        // { lat, lng, city, state }
-  locationError: null,
-  locationLoading: false,
-
-  // Busca
-  query: '',
-  category: 'todos',
-  sortBy: 'relevance',
-  radius: 10,
-
-  // Resultados
-  offers: [],
-  total: 0,
-  page: 1,
-  hasMore: false,
-  loading: false,
-  error: null,
-  queryTime: 0,
-
-  // Lojas próximas
-  nearbyStores: [],
-  storesLoading: false,
-
-  // Filtros UI
-  sidebarOpen: false,
-
-  // Actions
+  // Localização
+  location: null, locationError: null, locationLoading: false,
   setLocation: (loc) => set({ location: loc, locationError: null }),
   setLocationError: (err) => set({ locationError: err }),
   setLocationLoading: (v) => set({ locationLoading: v }),
 
-  setQuery: (q) => set({ query: q, page: 1 }),
-  setCategory: (c) => set({ category: c, page: 1 }),
-  setSortBy: (s) => set({ sortBy: s, page: 1 }),
-  setRadius: (r) => set({ radius: r, page: 1 }),
+  // Busca
+  query: '',
+  results: null,      // resposta completa do /search
+  searching: false,
+  searchError: null,
+  lastQuery: '',
 
-  setOffers: (data) => set({
-    offers: data.offers,
-    total: data.total,
-    hasMore: data.has_more,
-    queryTime: data.query_time_ms,
-    page: data.page,
-  }),
+  setQuery: (q) => set({ query: q }),
+  setSearching: (v) => set({ searching: v }),
+  setResults: (r) => set({ results: r, lastQuery: r?.query || '', searchError: null }),
+  setSearchError: (e) => set({ searchError: e, searching: false }),
+  clearResults: () => set({ results: null, lastQuery: '', searchError: null }),
 
-  appendOffers: (data) => set((state) => ({
-    offers: [...state.offers, ...data.offers],
-    hasMore: data.has_more,
-    page: data.page,
-    queryTime: data.query_time_ms,
-  })),
+  // View mode
+  viewMode: 'groups',   // 'groups' | 'flat'
+  setViewMode: (v) => set({ viewMode: v }),
 
-  setLoading: (v) => set({ loading: v }),
-  setError: (e) => set({ error: e }),
-  incrementPage: () => set((s) => ({ page: s.page + 1 })),
-
-  setNearbyStores: (stores) => set({ nearbyStores: stores }),
-  setStoresLoading: (v) => set({ storesLoading: v }),
-  setSidebarOpen: (v) => set({ sidebarOpen: v }),
-
-  reset: () => set({ offers: [], total: 0, page: 1, hasMore: false, error: null }),
+  // Store filter
+  activeStores: [],     // [] = todos
+  toggleStore: (id) => {
+    const curr = get().activeStores
+    set({ activeStores: curr.includes(id) ? curr.filter(s => s !== id) : [...curr, id] })
+  },
+  clearStoreFilter: () => set({ activeStores: [] }),
 }))
