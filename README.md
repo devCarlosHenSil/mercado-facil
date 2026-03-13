@@ -168,6 +168,42 @@ func scrapPromobit(query string) []models.Offer {
 }
 ```
 
+## 🗺️ Cobertura de Itu / SP
+
+O `storesItu()` no aggregator traz **cobertura completa e verificada** da cidade:
+
+### Atacados físicos
+| Loja | Endereço | Coordenadas |
+|------|----------|-------------|
+| **Atacadão Itu** | Av. Dr. Ermelindo Maffei, 945 | -23.2710, -47.2830 |
+| **Roldão Atacadista** | Av. Caetano Ruggieri, 3518 | -23.2780, -47.2870 |
+| **Atacadão do Frios** | Rua Santana, 382 — Centro | -23.2644, -47.2994 |
+
+### Hipermercados
+| Loja | Endereço | Coordenadas |
+|------|----------|-------------|
+| **Pão de Açúcar Hipermercado** | Rod. Marechal Rondon, Km 105 | -23.2666, -47.2800 |
+
+### Supermercados
+| Loja | Endereço | Coordenadas |
+|------|----------|-------------|
+| **Pão de Açúcar Vila Nova** | Av. Prudente de Moraes, 210 | -23.2620, -47.2960 |
+| **Pão de Açúcar Itu Centro** | Av. Dr. Otaviano P. Mendes, 423 | -23.2650, -47.2990 |
+| **Delta Supermercados** | Av. Francisco E. Favero, 534 | -23.2750, -47.3010 |
+| **São Vicente (unid. 1)** | Av. Eugen Wissmann, 600 | -23.2685, -47.3055 |
+| **São Vicente (unid. 2)** | Av. Eugen Wissmann, 2021 | -23.2660, -47.3080 |
+| **Supermercado Paulistão** | R. Argemiro D'Elboux, 210 | -23.2700, -47.2950 |
+| **Supermercados Caetano** | R. Vinte de Janeiro, 348 | -23.2630, -47.2970 |
+
+### Agregadores de encartes de Itu
+| Fonte | URL |
+|-------|-----|
+| Tiendeo Itu | https://www.tiendeo.com.br/itu/supermercados |
+| Shopfully/Publitas Itu | https://www.shopfully.com.br/itu/promocoes |
+
+> **Para adicionar uma nova loja:** siga as instruções no cabeçalho de `storesItu()` no arquivo `aggregator.go`.
+
+
 **Fontes sugeridas (gratuitas):**
 - Promobit RSS Feed
 - Pelando RSS Feed
