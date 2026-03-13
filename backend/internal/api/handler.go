@@ -105,16 +105,16 @@ func (h *Handler) NearbyStores(w http.ResponseWriter, r *http.Request) {
 // Categories retorna categorias disponíveis
 func (h *Handler) Categories(w http.ResponseWriter, r *http.Request) {
 	categories := []models.Category{
-		{ID: "todos", Name: "Todos", Icon: "🛒", Color: "#FF6B35"},
-		{ID: "mercearia", Name: "Mercearia", Icon: "🌾", Color: "#F7931E"},
-		{ID: "hortifruti", Name: "Hortifruti", Icon: "🥦", Color: "#4CAF50"},
-		{ID: "açougue", Name: "Açougue", Icon: "🥩", Color: "#E53935"},
-		{ID: "laticínios", Name: "Laticínios", Icon: "🧀", Color: "#FFC107"},
-		{ID: "padaria", Name: "Padaria", Icon: "🍞", Color: "#795548"},
-		{ID: "frios", Name: "Frios", Icon: "🥚", Color: "#00BCD4"},
-		{ID: "bebidas", Name: "Bebidas", Icon: "🥤", Color: "#9C27B0"},
-		{ID: "limpeza", Name: "Limpeza", Icon: "🧹", Color: "#607D8B"},
-		{ID: "higiene", Name: "Higiene", Icon: "🧴", Color: "#FF4081"},
+		{ID: "todos",      Name: "Todos",      Icon: "cart",  Color: "#FF6B35"},
+		{ID: "mercearia",  Name: "Mercearia",  Icon: "grain", Color: "#F7931E"},
+		{ID: "hortifruti", Name: "Hortifruti", Icon: "leaf",  Color: "#4CAF50"},
+		{ID: "acougue",    Name: "Acougue",    Icon: "meat",  Color: "#E53935"},
+		{ID: "laticinios", Name: "Laticinios", Icon: "milk",  Color: "#FFC107"},
+		{ID: "padaria",    Name: "Padaria",    Icon: "bread", Color: "#795548"},
+		{ID: "frios",      Name: "Frios",      Icon: "cold",  Color: "#00BCD4"},
+		{ID: "bebidas",    Name: "Bebidas",    Icon: "drink", Color: "#9C27B0"},
+		{ID: "limpeza",    Name: "Limpeza",    Icon: "clean", Color: "#607D8B"},
+		{ID: "higiene",    Name: "Higiene",    Icon: "health",Color: "#FF4081"},
 	}
 	writeJSON(w, categories)
 }

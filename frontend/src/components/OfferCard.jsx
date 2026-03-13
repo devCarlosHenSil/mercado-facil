@@ -1,120 +1,103 @@
-import { ExternalLink, MapPin, Clock, Tag } from 'lucide-react'
+import { ExternalLink, MapPin, Tag } from 'lucide-react'
 
-const STORE_TYPE_LABELS = {
-  supermercado:  'Supermercado',
-  hipermercado:  'Hipermercado',
-  atacado:       'Atacado',
-  marketplace:   'Online',
-  delivery:      'Delivery',
+const TYPE_LABELS = {
+  supermercado:'Supermercado', hipermercado:'Hipermercado', atacado:'Atacado',
+  marketplace:'Online', delivery:'Delivery', agregador:'Encartes'
 }
 
-function formatPrice(val) {
-  return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+const TYPE_COLORS = {
+  supermercado:'#22c55e', hipermercado:'#3b82f6', atacado:'#f97316',
+  marketplace:'#8b5cf6', delivery:'#ef4444', agregador:'#64748b'
 }
 
-function daysUntil(dateStr) {
-  const diff = new Date(dateStr) - new Date()
-  return Math.ceil(diff / (1000 * 60 * 60 * 24))
-}
+const fmt = (v) => v?.toLocaleString('pt-BR', { style:'currency', currency:'BRL' })
 
-export default function OfferCard({ offer, index = 0 }) {
-  const days = offer.valid_until ? daysUntil(offer.valid_until) : null
-  const isUrgent = days !== null && days <= 1
+function StoreBadge({ store }) {
+  const color = TYPE_COLORS[store?.type] || '#64748b'
+  const label = TYPE_LABELS[store?.type] || store?.type
 
   return (
-    <a
-      href={offer.product_url || offer.store?.website || '#'}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={{ animationDelay: `${(index % 20) * 30}ms` }}
-      className="animate-fade-up group block rounded-2xl border border-white/8 bg-card card-hover overflow-hidden"
-    >
-      {/* Imagem */}
-      <div className="relative aspect-[4/3] bg-muted overflow-hidden">
+    <div className="mt-3 pt-3 border-t border-white/5 flex items-center gap-2.5">
+      {/* Logo da loja — maior e com fundo branco para visibilidade */}
+      <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center flex-shrink-0 border border-white/10 overflow-hidden">
         <img
-          src={offer.image_url}
-          alt={offer.product_name}
-          loading="lazy"
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          src={store?.logo_url}
+          alt={store?.name}
+          className="w-7 h-7 object-contain"
           onError={(e) => {
-            e.target.src = `https://placehold.co/300x200/1a1a23/f97316?text=${encodeURIComponent(offer.product_name.slice(0, 12))}`
+            e.target.style.display = 'none'
+            e.target.parentElement.style.background = color
+            e.target.parentElement.innerHTML = '<span style="color:white;font-size:11px;font-weight:700;">' + (store?.name||'?').slice(0,2).toUpperCase() + '</span>'
           }}
         />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold text-white/80 truncate leading-tight">{store?.name}</p>
+        <span style={{ background: color + '22', color: color, border: '1px solid ' + color + '44' }}
+          className="text-xs px-1.5 py-0.5 rounded font-mono">{label}</span>
+      </div>
+    </div>
+  )
+}
 
-        {/* Discount badge */}
+export default function OfferCard({ offer, index=0 }) {
+  return (
+    <a href={offer.product_url||offer.store?.website||'#'} target="_blank" rel="noopener noreferrer"
+      style={{ animationDelay: (index%20)*30+'ms' }}
+      className="animate-fade-up group block rounded-2xl border border-white/8 bg-card card-hover overflow-hidden">
+
+      {/* Imagem */}
+      <div className="relative aspect-[4/3] bg-muted overflow-hidden">
+        <img src={offer.image_url} alt={offer.product_name} loading="lazy"
+          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          onError={(e) => {
+            e.target.src = 'https://placehold.co/300x200/1a1a23/f97316?text=' + encodeURIComponent((offer.product_name||'').split(' ').slice(0,2).join('+'))
+          }} />
+
+        {/* Badge desconto */}
         {offer.discount_pct > 0 && (
-          <div className="absolute top-2.5 left-2.5 bg-brand-500 text-white text-xs font-display font-bold px-2 py-1 rounded-lg shadow-lg">
+          <div className="absolute top-2.5 left-2.5 bg-brand-500 text-white text-xs font-bold px-2 py-1 rounded-lg shadow-lg">
             -{Math.round(offer.discount_pct)}%
           </div>
         )}
 
-        {/* Online badge */}
-        {offer.is_online && (
-          <div className="absolute top-2.5 right-2.5 bg-black/60 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-lg">
-            Online
+        {/* Badge online/distancia */}
+        {offer.is_online ? (
+          <div className="absolute top-2.5 right-2.5 bg-purple-600/90 text-white text-xs px-2 py-1 rounded-lg">Online</div>
+        ) : offer.distance_km > 0 ? (
+          <div className="absolute top-2.5 right-2.5 bg-black/70 text-white/80 text-xs px-2 py-1 rounded-lg flex items-center gap-0.5">
+            <MapPin size={9}/>{offer.distance_km?.toFixed(1)}km
           </div>
-        )}
-
-        {/* Urgency */}
-        {isUrgent && (
-          <div className="absolute bottom-2.5 left-2.5 right-2.5 bg-red-500/90 backdrop-blur-sm text-white text-xs font-medium px-2 py-1 rounded-lg flex items-center gap-1">
-            <Clock size={10} />
-            <span>Oferta termina hoje!</span>
-          </div>
-        )}
+        ) : null}
       </div>
 
-      {/* Conteúdo */}
+      {/* Conteudo */}
       <div className="p-3.5">
         {/* Categoria */}
         <div className="flex items-center gap-1 mb-1.5">
           <Tag size={10} className="text-brand-400/60" />
-          <span className="text-xs text-white/30 font-mono uppercase tracking-wider">{offer.category}</span>
+          <span className="text-xs text-white/30 uppercase tracking-wider">{offer.category}</span>
         </div>
 
-        {/* Nome */}
-        <h3 className="font-semibold text-sm text-white/90 leading-snug mb-0.5 line-clamp-2 group-hover:text-brand-300 transition-colors">
+        {/* Nome completo do produto */}
+        <h3 className="font-semibold text-sm text-white/90 leading-snug line-clamp-2 group-hover:text-brand-300 transition-colors mb-1">
           {offer.product_name}
         </h3>
-        <p className="text-xs text-white/30 mb-3 line-clamp-1">{offer.unit}</p>
+        <p className="text-xs text-white/30 mb-3">{offer.unit}</p>
 
-        {/* Preço */}
+        {/* Precos */}
         <div className="flex items-end justify-between">
           <div>
             {offer.old_price > 0 && (
-              <p className="text-xs text-white/30 line-through">{formatPrice(offer.old_price)}</p>
+              <p className="text-xs text-white/30 line-through">{fmt(offer.old_price)}</p>
             )}
-            <p className="text-xl font-display font-bold gradient-text">
-              {formatPrice(offer.price)}
-            </p>
+            <p className="text-xl font-bold gradient-text">{fmt(offer.price)}</p>
           </div>
-
-          <div className="text-right">
-            {!offer.is_online && offer.distance_km > 0 && (
-              <p className="text-xs text-white/40 flex items-center gap-0.5 justify-end mb-0.5">
-                <MapPin size={10} />
-                {offer.distance_km.toFixed(1)}km
-              </p>
-            )}
-            <ExternalLink size={14} className="text-white/20 group-hover:text-brand-400 transition-colors ml-auto" />
-          </div>
+          <ExternalLink size={14} className="text-white/20 group-hover:text-brand-400 mb-1" />
         </div>
 
         {/* Loja */}
-        <div className="mt-3 pt-3 border-t border-white/5 flex items-center gap-2">
-          <img
-            src={offer.store?.logo_url}
-            alt={offer.store?.name}
-            className="w-5 h-5 rounded object-contain"
-            onError={(e) => { e.target.style.display = 'none' }}
-          />
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-white/60 truncate">{offer.store?.name}</p>
-          </div>
-          <span className="text-xs text-white/25 shrink-0">
-            {STORE_TYPE_LABELS[offer.store?.type] || offer.store?.type}
-          </span>
-        </div>
+        <StoreBadge store={offer.store} />
       </div>
     </a>
   )
