@@ -7,10 +7,25 @@ const TYPE_COLORS = {
 }
 const fmt = v => v?.toLocaleString('pt-BR', { style:'currency', currency:'BRL' })
 
+// Favicon fallback chain: favicon.ico → google favicon service → initials
 function StoreLogo({ store }) {
-  const [err, setErr] = useState(false)
+  const [src, setSrc] = useState(store?.logo_url || '')
+  const [tries, setTries] = useState(0)
   const color = TYPE_COLORS[store?.type] || '#64748b'
-  if (err || !store?.logo_url) {
+
+  const fallbacks = [
+    store?.logo_url,
+    store?.website ? `https://www.google.com/s2/favicons?domain=${store.website}&sz=64` : null,
+  ].filter(Boolean)
+
+  function handleError() {
+    const next = tries + 1
+    setTries(next)
+    if (next < fallbacks.length) setSrc(fallbacks[next])
+    else setSrc('')
+  }
+
+  if (!src) {
     return (
       <div style={{ background: color }} className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0">
         <span className="text-white text-xs font-bold">{(store?.name||'?').slice(0,2).toUpperCase()}</span>
@@ -18,8 +33,8 @@ function StoreLogo({ store }) {
     )
   }
   return (
-    <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shrink-0 overflow-hidden">
-      <img src={store.logo_url} alt={store.name} className="w-6 h-6 object-contain" onError={() => setErr(true)} />
+    <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shrink-0 overflow-hidden p-1">
+      <img src={src} alt={store?.name} className="w-full h-full object-contain" onError={handleError} />
     </div>
   )
 }
@@ -35,9 +50,21 @@ export default function PriceGroupCard({ group }) {
       {/* Imagem do melhor resultado */}
       {best.image_url && (
         <div className="relative aspect-square bg-white/5 overflow-hidden rounded-t-2xl">
-          <img src={best.image_url} alt={group.canonical_name} loading="lazy"
-            className="w-full h-full object-contain p-2"
-            onError={e => { e.target.parentElement.style.display='none' }} />
+          <img
+            src={best.image_url}
+            alt={group.canonical_name}
+            loading="lazy"
+            className="w-full h-full object-contain p-3"
+            referrerPolicy="no-referrer"
+            crossOrigin="anonymous"
+            onError={e => {
+              // Try without crossorigin on second attempt
+              if (e.target.dataset.retry) { e.target.parentElement.style.display='none'; return }
+              e.target.dataset.retry = '1'
+              e.target.removeAttribute('crossorigin')
+              e.target.src = e.target.src
+            }}
+          />
           {group.savings > 0.5 && (
             <div className="absolute top-2 left-2 flex items-center gap-1 bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-lg">
               <TrendingDown size={11} /> Economize {fmt(group.savings)}

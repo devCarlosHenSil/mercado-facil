@@ -2,7 +2,7 @@
  * Scrapers de busca — usando Puppeteer com Chrome do sistema
  */
 import { parsePrice, log, sleep } from './search-utils.js'
-import { newPage } from './browser.js'
+import { restoreSession, loginStore } from './auth.js'
 
 const makeResult = (store, name, price, opts = {}) => ({
   product_name: name,
@@ -15,9 +15,36 @@ const makeResult = (store, name, price, opts = {}) => ({
   store,
 })
 
+const ITU_CEP = '13300-000'
+
+// Fecha popups de CEP/localização e preenche com CEP de Itu
+async function handleCepPopup(page) {
+  try {
+    // Fecha modal genérico (botão X ou Fechar)
+    await page.evaluate(() => {
+      const btns = Array.from(document.querySelectorAll('button,a'))
+      const close = btns.find(b => /fechar|close|×|✕|não|agora/i.test(b.textContent))
+      if (close) close.click()
+    })
+    await new Promise(r => setTimeout(r, 300))
+
+    // Preenche campo de CEP se existir
+    const cepInput = await page.$('input[placeholder*="CEP"],input[placeholder*="cep"],input[name*="cep"],input[name*="CEP"],input[id*="cep"]')
+    if (cepInput) {
+      await cepInput.click({ clickCount: 3 })
+      await cepInput.type(ITU_CEP, { delay: 80 })
+      await page.keyboard.press('Enter')
+      await new Promise(r => setTimeout(r, 1200))
+    }
+  } catch (_) {}
+}
+
 // ── Extrator genérico que funciona na maioria dos sites VTEX ──────────────
 async function extractVtex(page, store, query) {
   const results = []
+
+  // Fecha popup de CEP se aparecer
+  await handleCepPopup(page)
 
   // Tenta API VTEX interna (roda dentro do contexto da página)
   const api = await page.evaluate(async (q) => {
@@ -37,10 +64,14 @@ async function extractVtex(page, store, query) {
       const offer = sku?.sellers?.[0]?.commertialOffer
       if (!offer?.Price || offer.Price <= 0) continue
       if (offer.AvailableQuantity === 0) continue // produto sem estoque
+      // Imagem: usa URL absoluta sempre para evitar CORS
+      let imgUrl = sku.images?.[0]?.imageUrl || ''
+      if (imgUrl && !imgUrl.startsWith('http')) imgUrl = store.website + imgUrl
+      imgUrl = imgUrl.replace(/-\d+-\d+\./, '-300-300.')
       results.push(makeResult(store, item.productName, offer.Price, {
         old_price: offer.ListPrice > offer.Price ? offer.ListPrice : 0,
-        image_url: (sku.images?.[0]?.imageUrl || '').replace(/-\d+-\d+\./, '-300-300.'),
-        product_url: page.url().split('/s?')[0] + '/' + (item.linkText || '') + '/p',
+        image_url: imgUrl,
+        product_url: store.website + '/' + (item.linkText || '') + '/p',
         unit: sku.name || '',
       }))
     }
@@ -94,7 +125,7 @@ async function extractVtex(page, store, query) {
       return {
         name: allTexts[0] || '',
         priceTexts,
-        img: img?.src || img?.dataset?.src || '',
+        img: img?.dataset?.src || img?.src || img?.getAttribute('data-src') || img?.getAttribute('data-lazy-src') || '',
         href: link?.href || '',
       }
     }).filter(i => i.name.length > 3 && i.priceTexts.length > 0)
@@ -135,13 +166,16 @@ export async function searchSavegnago(query, page) {
 // ─── CARREFOUR ────────────────────────────────────────────────────────────
 const CARREFOUR = {
   id: 'carrefour', name: 'Carrefour Online',
-  logo_url: 'https://logodownload.org/wp-content/uploads/2018/07/carrefour-logo-0.png',
-  type: 'hipermercado', website: 'https://www.carrefour.com.br',
+  logo_url: 'https://mercado.carrefour.com.br/favicon.ico',
+  type: 'hipermercado', website: 'https://mercado.carrefour.com.br',
 }
 export async function searchCarrefour(query, page) {
   try {
-    await page.goto('https://www.carrefour.com.br/s?q=' + encodeURIComponent(query), { waitUntil: 'domcontentloaded', timeout: 15000 })
-    await sleep(3000)
+        // Restaura sessão autenticada se disponível
+    await restoreSession(page, 'carrefour')
+    await page.goto('https://mercado.carrefour.com.br/s?q=' + encodeURIComponent(query) + '&sort=score_desc', { waitUntil: 'domcontentloaded', timeout: 28000 })
+    await sleep(2500)
+    await handleCepPopup(page)
     const results = await extractVtex(page, CARREFOUR, query)
     log.ok('Carrefour: ' + results.length + ' resultados')
     return results
@@ -151,13 +185,22 @@ export async function searchCarrefour(query, page) {
 // ─── ATACADÃO ─────────────────────────────────────────────────────────────
 const ATACADAO = {
   id: 'atacadao', name: 'Atacadao',
-  logo_url: 'https://logodownload.org/wp-content/uploads/2021/09/atacadao-logo-0.png',
+  logo_url: 'https://www.atacadao.com.br/favicon.ico',
   type: 'atacado', website: 'https://www.atacadao.com.br',
 }
 export async function searchAtacadao(query, page) {
   try {
-    await page.goto('https://www.atacadao.com.br/s?q=' + encodeURIComponent(query), { waitUntil: 'domcontentloaded', timeout: 15000 })
-    await sleep(3000)
+        // Restaura sessão autenticada se disponível
+    await restoreSession(page, 'atacadao')
+    await page.goto('https://www.atacadao.com.br/s?q=' + encodeURIComponent(query), { waitUntil: 'domcontentloaded', timeout: 20000 })
+    await sleep(2000)
+    // Dismiss CEP popup
+    await page.evaluate(() => {
+      const btns = Array.from(document.querySelectorAll('button'))
+      const skip = btns.find(b => /agora não|fechar|pular|skip|close/i.test(b.textContent))
+      if (skip) skip.click()
+    }).catch(() => {})
+    await sleep(500)
     const results = await extractVtex(page, ATACADAO, query)
     log.ok('Atacadao: ' + results.length + ' resultados')
     return results
@@ -167,13 +210,15 @@ export async function searchAtacadao(query, page) {
 // ─── ASSAÍ ────────────────────────────────────────────────────────────────
 const ASSAI = {
   id: 'assai', name: 'Assai Atacadista',
-  logo_url: 'https://logodownload.org/wp-content/uploads/2022/06/assai-atacadista-logo-0.png',
+  logo_url: 'https://www.assai.com.br/favicon.ico',
   type: 'atacado', website: 'https://www.assai.com.br',
 }
 export async function searchAssai(query, page) {
   try {
-    await page.goto('https://www.assai.com.br/s?q=' + encodeURIComponent(query), { waitUntil: 'domcontentloaded', timeout: 15000 })
-    await sleep(3000)
+        // Restaura sessão autenticada se disponível
+    await restoreSession(page, 'assai')
+    await page.goto('https://www.assai.com.br/busca?q=' + encodeURIComponent(query), { waitUntil: 'domcontentloaded', timeout: 25000 })
+    await sleep(2500)
     const results = await extractVtex(page, ASSAI, query)
     log.ok('Assai: ' + results.length + ' resultados')
     return results
@@ -183,13 +228,16 @@ export async function searchAssai(query, page) {
 // ─── PÃO DE AÇÚCAR ────────────────────────────────────────────────────────
 const PDA = {
   id: 'paodeacucar', name: 'Pao de Acucar',
-  logo_url: 'https://logodownload.org/wp-content/uploads/2022/03/pao-de-acucar-logo-0.png',
+  logo_url: 'https://www.paodeacucar.com/favicon.ico',
   type: 'supermercado', website: 'https://www.paodeacucar.com',
 }
 export async function searchPaodeacucar(query, page) {
   try {
-    await page.goto('https://www.paodeacucar.com/s?q=' + encodeURIComponent(query), { waitUntil: 'domcontentloaded', timeout: 15000 })
-    await sleep(3000)
+        // Restaura sessão autenticada se disponível
+    await restoreSession(page, 'paodeacucar')
+    await page.goto('https://www.paodeacucar.com/s?q=' + encodeURIComponent(query) + '&sort=score_desc&page=1', { waitUntil: 'domcontentloaded', timeout: 25000 })
+    await sleep(2500)
+    await handleCepPopup(page)
     const results = await extractVtex(page, PDA, query)
     log.ok('Pao de Acucar: ' + results.length + ' resultados')
     return results
@@ -199,14 +247,29 @@ export async function searchPaodeacucar(query, page) {
 // ─── PAGUE MENOS ─────────────────────────────────────────────────────────
 const PAGUE_MENOS = {
   id: 'paguemenos', name: 'Supermercados Pague Menos',
-  logo_url: 'https://www.superpaguemenos.com.br/arquivos/logo-pague-menos.png',
+  logo_url: 'https://www.superpaguemenos.com.br/favicon.ico',
   type: 'supermercado', website: 'https://www.superpaguemenos.com.br',
 }
 export async function searchPagueMenos(query, page) {
   try {
+        // Restaura sessão autenticada se disponível
+    await restoreSession(page, 'paguemenos')
     await page.goto('https://www.superpaguemenos.com.br/' + encodeURIComponent(query) + '?map=ft', { waitUntil: 'domcontentloaded', timeout: 15000 })
     await sleep(2000)
+    // Force lazy images to load by scrolling
+    await page.evaluate(async () => {
+      for (let i = 0; i < 5; i++) {
+        window.scrollBy(0, 400)
+        await new Promise(r => setTimeout(r, 300))
+      }
+      window.scrollTo(0, 0)
+    })
+    await sleep(800)
     const results = await extractVtex(page, PAGUE_MENOS, query)
+    // Fix lazy-loaded images: replace data-src with src
+    for (const r of results) {
+      if (!r.image_url || r.image_url.includes('data:image')) r.image_url = ''
+    }
     log.ok('Pague Menos: ' + results.length + ' resultados')
     return results
   } catch(e) { log.warn('Pague Menos: ' + e.message); return [] }
@@ -215,12 +278,14 @@ export async function searchPagueMenos(query, page) {
 // ─── TENDA ────────────────────────────────────────────────────────────────
 const TENDA = {
   id: 'tenda', name: 'Tenda Atacadista',
-  logo_url: 'https://www.tenda.com/arquivos/tenda-logo.png',
-  type: 'atacado', website: 'https://www.tenda.com',
+  logo_url: 'https://www.tendaatacado.com.br/favicon.ico',
+  type: 'atacado', website: 'https://www.tendaatacado.com.br',
 }
 export async function searchTenda(query, page) {
   try {
-    await page.goto('https://www.tenda.com/s?q=' + encodeURIComponent(query), { waitUntil: 'domcontentloaded', timeout: 15000 })
+        // Restaura sessão autenticada se disponível
+    await restoreSession(page, 'tenda')
+    await page.goto('https://www.tendaatacado.com.br/busca?q=' + encodeURIComponent(query), { waitUntil: 'domcontentloaded', timeout: 20000 })
     await sleep(2000)
     const results = await extractVtex(page, TENDA, query)
     log.ok('Tenda: ' + results.length + ' resultados')
@@ -231,13 +296,22 @@ export async function searchTenda(query, page) {
 // ─── SÃO VICENTE ─────────────────────────────────────────────────────────
 const SAO_VICENTE = {
   id: 'saovicente', name: 'Supermercados Sao Vicente',
-  logo_url: 'https://ui-avatars.com/api/?name=SV&background=1e40af&color=fff&bold=true&size=128',
-  type: 'supermercado', website: 'https://www.svcompras.com.br',
+  logo_url: 'https://www.svicente.com.br/favicon.ico',
+  type: 'supermercado', website: 'https://www.svicente.com.br',
 }
 export async function searchSaoVicente(query, page) {
   try {
-    await page.goto('https://www.saovicenteonline.com.br/busca?q=' + encodeURIComponent(query), { waitUntil: 'domcontentloaded', timeout: 15000 })
+        // Restaura sessão autenticada se disponível
+    await restoreSession(page, 'saovicente')
+    await page.goto('https://www.svicente.com.br/busca?q=' + encodeURIComponent(query), { waitUntil: 'domcontentloaded', timeout: 20000 })
     await sleep(2000)
+    // Fecha modal de CEP e loja
+    await page.evaluate(() => {
+      const btns = Array.from(document.querySelectorAll('button,a,[class*="close"],[class*="fechar"]'))
+      const close = btns.find(b => /fechar|×|✕|depois|agora não|skip/i.test(b.textContent) || b.getAttribute('aria-label')?.match(/close|fechar/i))
+      if (close) close.click()
+    }).catch(() => {})
+    await sleep(600)
     const results = await extractVtex(page, SAO_VICENTE, query)
     log.ok('Sao Vicente: ' + results.length + ' resultados')
     return results
@@ -245,7 +319,6 @@ export async function searchSaoVicente(query, page) {
 }
 
 export const ALL_SEARCHERS = [
-  { id: 'savegnago',   fn: searchSavegnago,   store: SAVEGNAGO },
   { id: 'carrefour',   fn: searchCarrefour,   store: CARREFOUR },
   { id: 'atacadao',    fn: searchAtacadao,    store: ATACADAO },
   { id: 'assai',       fn: searchAssai,       store: ASSAI },

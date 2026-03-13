@@ -21,15 +21,53 @@ export function normalize(str) {
     .trim()
 }
 
+// ─── Palavras irrelevantes que não contribuem para similaridade ───────────
+const STOP_WORDS = new Set([
+  'de','do','da','dos','das','com','sem','para','por','em','e','a','o','um','uma',
+  'tipo','marca','sabor','caixa','pacote','pote','lata','garrafa','frasco','saco',
+  'unidade','unid','cx','pct','kit','combo','pack','fardo','display'
+])
+
+// ─── Palavras-chave da query que DEVEM aparecer no produto ────────────────
+// Garante que "óleo de soja" não retorna "cerveja"
+function extractKeyTerms(query) {
+  const words = normalize(query).split(' ').filter(w => w.length > 2 && !STOP_WORDS.has(w))
+  return words
+}
+
+// ─── Verifica se produto é relevante para a query ─────────────────────────
+export function isRelevant(query, productName) {
+  const qTerms = extractKeyTerms(query)
+  if (qTerms.length === 0) return true
+
+  const pNorm = normalize(productName)
+
+  // Pelo menos 60% dos termos principais da query devem aparecer no produto
+  const minMatch = Math.ceil(qTerms.length * 0.6)
+  let matched = 0
+  for (const term of qTerms) {
+    if (pNorm.includes(term)) matched++
+    else {
+      // Partial: "cerveja" não bate com "cerv" mas "pilao" bate com "pilão"
+      for (const word of pNorm.split(' ')) {
+        if (word.length > 3 && (word.startsWith(term.slice(0,4)) || term.startsWith(word.slice(0,4)))) {
+          matched += 0.8
+          break
+        }
+      }
+    }
+  }
+  return matched >= minMatch
+}
+
 // ─── Score de similaridade entre dois nomes de produto ───────────────────
-// Retorna 0-1 onde 1 = mesmo produto
 export function similarity(a, b) {
   const na = normalize(a)
   const nb = normalize(b)
   if (na === nb) return 1.0
 
-  const wordsA = new Set(na.split(' ').filter(w => w.length > 2))
-  const wordsB = new Set(nb.split(' ').filter(w => w.length > 2))
+  const wordsA = new Set(na.split(' ').filter(w => w.length > 2 && !STOP_WORDS.has(w)))
+  const wordsB = new Set(nb.split(' ').filter(w => w.length > 2 && !STOP_WORDS.has(w)))
 
   if (wordsA.size === 0 || wordsB.size === 0) return 0
 
@@ -37,9 +75,11 @@ export function similarity(a, b) {
   for (const w of wordsA) {
     if (wordsB.has(w)) matches++
     else {
-      // Partial match: "arroz" matches "arrozes"
       for (const wb of wordsB) {
-        if (w.startsWith(wb) || wb.startsWith(w)) { matches += 0.7; break }
+        if (w.length > 3 && wb.length > 3 && (w.startsWith(wb.slice(0,4)) || wb.startsWith(w.slice(0,4)))) {
+          matches += 0.6
+          break
+        }
       }
     }
   }
@@ -53,39 +93,34 @@ export function extractUnit(name) {
   if (!m) return null
   const val = parseFloat(m[1].replace(',', '.'))
   const unit = m[2].toLowerCase()
-  // Normaliza para grama/ml
   if (['kg','quilo'].includes(unit)) return { val: val * 1000, unit: 'g' }
   if (['l','lt','litro'].includes(unit)) return { val: val * 1000, unit: 'ml' }
   return { val, unit }
 }
 
-
 // ─── Detecta produtos indisponíveis ──────────────────────────────────────
 const UNAVAILABLE_TERMS = [
-  'indisponivel', 'indisponível', 'esgotado', 'sem estoque', 'fora de estoque',
-  'produto indisponivel', 'nao disponivel', 'out of stock', 'unavailable'
+  'indisponivel','esgotado','sem estoque','fora de estoque','nao disponivel','out of stock'
 ]
 
 export function isUnavailable(name, extra = '') {
   const text = normalize(name + ' ' + extra)
-  return UNAVAILABLE_TERMS.some(t => text.includes(normalize(t)))
+  return UNAVAILABLE_TERMS.some(t => text.includes(t))
 }
 
 // ─── Verifica se o produto bate com a unidade buscada ────────────────────
-// ex: busca "arroz 5kg" → produto "arroz 1kg" retorna false
 export function matchesUnit(query, productName) {
   const qUnit = extractUnit(query)
-  if (!qUnit) return true // query sem unidade = aceita qualquer
+  if (!qUnit) return true
   const pUnit = extractUnit(productName)
-  if (!pUnit) return true // produto sem unidade = aceita
-  if (qUnit.unit !== pUnit.unit) return true // unidades diferentes = não compara
-  // Tolera ±20% de diferença de peso
+  if (!pUnit) return true
+  if (qUnit.unit !== pUnit.unit) return true
   const ratio = qUnit.val / pUnit.val
   return ratio >= 0.7 && ratio <= 1.4
 }
 
 // ─── Agrupa resultados de múltiplas lojas pelo mesmo produto ──────────────
-export function groupByProduct(results, minSimilarity = 0.55) {
+export function groupByProduct(results, minSimilarity = 0.60) {
   const groups = []
 
   for (const result of results) {
@@ -120,7 +155,6 @@ export function groupByProduct(results, minSimilarity = 0.55) {
     }
   }
 
-  // Ordena grupos por economia potencial (quem tem mais variação de preço primeiro)
   return groups.sort((a, b) => b.savings - a.savings)
 }
 
