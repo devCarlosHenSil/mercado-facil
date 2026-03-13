@@ -1,0 +1,21 @@
+# Dependências e builds
+node_modules/
+dist/
+build/
+
+# Ambiente (nunca versionar)
+.env
+.env*.local
+
+# Logs e temporários
+*.log
+*.tmp
+.cache/
+
+# OS e IDE
+.DS_Store
+.vscode/
+.idea/
+
+# Testes
+coverage/
