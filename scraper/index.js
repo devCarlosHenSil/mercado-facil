@@ -5,7 +5,7 @@
 import express from 'express'
 import { ALL_SEARCHERS } from './search-scrapers.js'
 import { newPage } from './browser.js'
-import { groupByProduct, log, sleep } from './search-utils.js'
+import { groupByProduct, isUnavailable, matchesUnit, log, sleep } from './search-utils.js'
 
 const app = express()
 app.use(express.json())
@@ -70,7 +70,13 @@ app.post('/search', async (req, res) => {
 
   activeSearches--
 
-  const valid = allResults.filter(r => r.product_name?.length > 2 && r.price > 0 && r.price < 10000)
+  const valid = allResults.filter(r =>
+    r.product_name?.length > 2 &&
+    r.price > 0 &&
+    r.price < 10000 &&
+    !isUnavailable(r.product_name) &&
+    matchesUnit(query, r.product_name)
+  )
   const groups = groupByProduct(valid)
   const elapsed = Date.now() - t0
   log.ok('"' + query + '": ' + valid.length + ' resultados em ' + elapsed + 'ms — ' + groups.length + ' grupos')
@@ -78,7 +84,7 @@ app.post('/search', async (req, res) => {
   const response = { query, total_results: valid.length, total_groups: groups.length,
     elapsed_ms: elapsed, from_cache: false, stores: storeStatus, groups, flat: valid }
 
-  cache.set(cacheKey, { data: response, ts: Date.now() })
+  if (valid.length > 0) cache.set(cacheKey, { data: response, ts: Date.now() })
   res.json(response)
 })
 

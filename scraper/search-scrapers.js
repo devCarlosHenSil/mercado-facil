@@ -36,6 +36,7 @@ async function extractVtex(page, store, query) {
       const sku = item.items?.[0]
       const offer = sku?.sellers?.[0]?.commertialOffer
       if (!offer?.Price || offer.Price <= 0) continue
+      if (offer.AvailableQuantity === 0) continue // produto sem estoque
       results.push(makeResult(store, item.productName, offer.Price, {
         old_price: offer.ListPrice > offer.Price ? offer.ListPrice : 0,
         image_url: (sku.images?.[0]?.imageUrl || '').replace(/-\d+-\d+\./, '-300-300.'),

@@ -34,9 +34,9 @@ export default function PriceGroupCard({ group }) {
     <div className="rounded-2xl border border-white/8 bg-card card-hover overflow-hidden animate-fade-up">
       {/* Imagem do melhor resultado */}
       {best.image_url && (
-        <div className="relative aspect-[16/7] bg-muted overflow-hidden">
+        <div className="relative aspect-square bg-white/5 overflow-hidden rounded-t-2xl">
           <img src={best.image_url} alt={group.canonical_name} loading="lazy"
-            className="w-full h-full object-cover"
+            className="w-full h-full object-contain p-2"
             onError={e => { e.target.parentElement.style.display='none' }} />
           {group.savings > 0.5 && (
             <div className="absolute top-2 left-2 flex items-center gap-1 bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-lg">

@@ -59,6 +59,31 @@ export function extractUnit(name) {
   return { val, unit }
 }
 
+
+// ─── Detecta produtos indisponíveis ──────────────────────────────────────
+const UNAVAILABLE_TERMS = [
+  'indisponivel', 'indisponível', 'esgotado', 'sem estoque', 'fora de estoque',
+  'produto indisponivel', 'nao disponivel', 'out of stock', 'unavailable'
+]
+
+export function isUnavailable(name, extra = '') {
+  const text = normalize(name + ' ' + extra)
+  return UNAVAILABLE_TERMS.some(t => text.includes(normalize(t)))
+}
+
+// ─── Verifica se o produto bate com a unidade buscada ────────────────────
+// ex: busca "arroz 5kg" → produto "arroz 1kg" retorna false
+export function matchesUnit(query, productName) {
+  const qUnit = extractUnit(query)
+  if (!qUnit) return true // query sem unidade = aceita qualquer
+  const pUnit = extractUnit(productName)
+  if (!pUnit) return true // produto sem unidade = aceita
+  if (qUnit.unit !== pUnit.unit) return true // unidades diferentes = não compara
+  // Tolera ±20% de diferença de peso
+  const ratio = qUnit.val / pUnit.val
+  return ratio >= 0.7 && ratio <= 1.4
+}
+
 // ─── Agrupa resultados de múltiplas lojas pelo mesmo produto ──────────────
 export function groupByProduct(results, minSimilarity = 0.55) {
   const groups = []
