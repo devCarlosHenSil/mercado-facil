@@ -70,6 +70,8 @@ export function similarity(a, b) {
   const wordsB = new Set(nb.split(' ').filter(w => w.length > 2 && !STOP_WORDS.has(w)))
 
   if (wordsA.size === 0 || wordsB.size === 0) return 0
+  const ratio = Math.max(wordsA.size, wordsB.size) / Math.min(wordsA.size, wordsB.size)
+  if (ratio > 1.8) return 0
 
   let matches = 0
   for (const w of wordsA) {
@@ -99,6 +101,13 @@ export function extractUnit(name) {
 }
 
 // ─── Detecta produtos indisponíveis ──────────────────────────────────────
+const KIT_TERMS = ["kit ","combo "," + ","leve "," pague ","promocao","promocional"]
+
+export function isKit(name) {
+  const n = normalize(name)
+  return KIT_TERMS.some(t => n.includes(t))
+}
+
 const UNAVAILABLE_TERMS = [
   'indisponivel','esgotado','sem estoque','fora de estoque','nao disponivel','out of stock'
 ]
@@ -120,7 +129,7 @@ export function matchesUnit(query, productName) {
 }
 
 // ─── Agrupa resultados de múltiplas lojas pelo mesmo produto ──────────────
-export function groupByProduct(results, minSimilarity = 0.60) {
+export function groupByProduct(results, minSimilarity = 0.85) {
   const groups = []
 
   for (const result of results) {

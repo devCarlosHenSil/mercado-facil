@@ -24,7 +24,7 @@ func NewHandler(agg *scraper.Aggregator, c *cache.Cache) *Handler {
 	return &Handler{
 		aggregator: agg,
 		cache:      c,
-		httpClient: &http.Client{Timeout: 90 * time.Second},
+		httpClient: &http.Client{Timeout: 28 * time.Second},
 	}
 }
 
