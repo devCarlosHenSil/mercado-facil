@@ -57,7 +57,8 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          # Usa o secret se existir, senão fallback para localhost
+          VITE_API_URL: ${{ secrets.VITE_API_URL || 'http://localhost:8080' }}
 
       - name: Upload dist
         uses: actions/upload-artifact@v4
@@ -66,39 +67,39 @@ jobs:
           path: frontend/dist
 
   # ── Deploy Railway (backend) ──────────────────────────────────────────────
-  deploy-backend:
-    name: Deploy → Railway
-    needs: [backend, frontend]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Railway CLI
-        run: npm i -g @railway/cli
-      - name: Deploy
-        run: railway up --service mercadofacil-api
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+  # deploy-backend:
+  #   name: Deploy → Railway
+  #   needs: [backend, frontend]
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main'
+  #
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Install Railway CLI
+  #       run: npm i -g @railway/cli
+  #     - name: Deploy
+  #       run: railway up --service mercadofacil-api
+  #       env:
+  #         RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
   # ── Deploy Vercel (frontend) ──────────────────────────────────────────────
-  deploy-frontend:
-    name: Deploy → Vercel
-    needs: [frontend]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install Vercel CLI
-        run: npm i -g vercel
-      - name: Deploy
-        run: vercel --prod --token ${{ secrets.VERCEL_TOKEN }} --yes
-        working-directory: frontend
-        env:
-          VERCEL_ORG_ID:     ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  # deploy-frontend:
+  #   name: Deploy → Vercel
+  #   needs: [frontend]
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main'
+  #
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Setup Node
+  #       uses: actions/setup-node@v4
+  #       with:
+  #         node-version: '20'
+  #     - name: Install Vercel CLI
+  #       run: npm i -g vercel
+  #     - name: Deploy
+  #       run: vercel --prod --token ${{ secrets.VERCEL_TOKEN }} --yes
+  #       working-directory: frontend
+  #       env:
+  #         VERCEL_ORG_ID:     ${{ secrets.VERCEL_ORG_ID }}
+  #         VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
